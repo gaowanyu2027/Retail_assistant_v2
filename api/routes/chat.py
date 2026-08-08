@@ -98,6 +98,27 @@ async def rename_session(session_id: str, payload: SessionRename):
         raise HTTPException(status_code=500, detail=f"会话重命名失败: {e}")
 
 
+@router.delete("/sessions/{session_id}")
+async def delete_session(session_id: str):
+    """删除会话、消息，并清理对应向量。"""
+    try:
+        import mysql_db
+        import vector_memory
+        message_ids = mysql_db.delete_chat_session(session_id)
+        for message_id in message_ids:
+            try:
+                vector_memory.delete_message(message_id)
+            except Exception as e:
+                print(f"[Vector] 删除向量失败 message_id={message_id}: {e}")
+        return {
+            "status": "ok",
+            "session_id": session_id,
+            "deleted_messages": len(message_ids),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"会话删除失败: {e}")
+
+
 @router.get("/sessions/{session_id}/messages")
 async def get_messages(session_id: str):
     """获取指定会话消息。"""

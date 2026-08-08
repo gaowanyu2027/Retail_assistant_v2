@@ -614,6 +614,31 @@ def search_chat_messages(keyword: str):
     return results
 
 
+def get_chat_message_ids(session_id: str):
+    """获取指定会话下的消息 ID。"""
+    conn = get_connection()
+    ids = []
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id FROM query_history WHERE session_id=%s ORDER BY id",
+            (session_id,),
+        )
+        ids = [row[0] for row in cur.fetchall()]
+    conn.close()
+    return ids
+
+
+def delete_chat_session(session_id: str):
+    """删除会话及其全部消息，返回被删除的消息 ID。"""
+    message_ids = get_chat_message_ids(session_id)
+    conn = get_connection()
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM query_history WHERE session_id=%s", (session_id,))
+        cur.execute("DELETE FROM chat_session WHERE session_id=%s", (session_id,))
+    conn.close()
+    return message_ids
+
+
 def get_all_query_history_records():
     """获取全部查询历史，用于向量库重建。"""
     conn = get_connection()

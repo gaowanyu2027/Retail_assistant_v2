@@ -449,20 +449,22 @@ async def video_stream(websocket: WebSocket):
         print(f"[WS] 表情分析模块加载失败: {e}")
 
     track_mgr = TrackStateManager()
-    processor = VideoProcessor(detector, track_mgr, roi_mgr, frame_skip=2,
-                               face_emotion=face_emotion)
+    processor = VideoProcessor(detector, track_mgr, roi_mgr, frame_skip=1,
+                               face_emotion=face_emotion, face_emotion_interval=5)
     event_detector = VideoEventDetector(roi_mgr)
 
     from config.settings import LOCAL_ROI_CONFIG_PATH, PROJECT_ROOT
     from cv_engine.roi_manager import ROIManager
     local_roi_mgr = ROIManager(str(PROJECT_ROOT / LOCAL_ROI_CONFIG_PATH))
-    local_processor = VideoProcessor(detector, track_mgr, local_roi_mgr, frame_skip=2,
-                                     face_emotion=face_emotion)
+    local_processor = VideoProcessor(detector, track_mgr, local_roi_mgr, frame_skip=1,
+                                     face_emotion=face_emotion, face_emotion_interval=5)
     local_event_detector = VideoEventDetector(local_roi_mgr)
 
     bg_thread: threading.Thread | None = None
     cap: cv2.VideoCapture | None = None
     _last_pushed_frame_id = -1
+    _push_log_time = _time.time()
+    _push_count = 0
 
     def start_processing(cap_source, mode="retail", use_processor=None, use_event_detector=None):
         """启动后台处理线程"""
@@ -477,7 +479,8 @@ async def video_stream(websocket: WebSocket):
             _active["running"] = True
             _active["paused"] = False
             _active["mode"] = mode
-            _active["target_fps"] = 15.0
+            from config.settings import VIDEO_FPS
+            _active["target_fps"] = float(VIDEO_FPS)
 
         nonlocal _last_pushed_frame_id
         global _latest_result, _latest_frame_b64
@@ -516,7 +519,7 @@ async def video_stream(websocket: WebSocket):
     try:
         while True:
             try:
-                raw = await asyncio.wait_for(websocket.receive_text(), timeout=0.1)
+                raw = await asyncio.wait_for(websocket.receive_text(), timeout=0.005)
                 msg = json.loads(raw)
                 action = msg.get("action", "")
                 mode = msg.get("mode", "retail")
@@ -534,13 +537,28 @@ async def video_stream(websocket: WebSocket):
                     if cap:
                         cap.release()
                     cap = cv2.VideoCapture(camera_id, cv2.CAP_DSHOW)
-                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 480)
-                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
+                    try:
+                        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+                    except Exception:
+                        pass
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+                    from config.settings import VIDEO_CAMERA_FPS
+                    cap.set(cv2.CAP_PROP_FPS, VIDEO_CAMERA_FPS)
+                    try:
+                        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    except Exception:
+                        pass
                     with _lock:
                         _active["source"] = "webcam"
                         _active["camera_id"] = camera_id
                     start_processing(cap, mode)
-                    print(f"[WS] 摄像头 #{camera_id} 已启动 (模式: {mode})")
+                    print(
+                        f"[WS] 摄像头 #{camera_id} 已启动 (模式: {mode}, "
+                        f"{int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x"
+                        f"{int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))}, "
+                        f"FPS={cap.get(cv2.CAP_PROP_FPS):.1f})"
+                    )
 
                 elif action == "start_file":
                     file_path = msg.get("file_path", "")
@@ -632,7 +650,6 @@ async def video_stream(websocket: WebSocket):
 
             msg_to_send = {
                 "type": "frame",
-                "frame": frame_b64,
                 "frame_id": result_to_send["frame_id"],
                 "timestamp": result_to_send.get("timestamp", 0),
                 "tracks": result_to_send.get("tracks", []),
@@ -644,7 +661,25 @@ async def video_stream(websocket: WebSocket):
             if "faces" in result_to_send:
                 msg_to_send["faces"] = result_to_send["faces"]
 
-            await websocket.send_json(msg_to_send)
+            if new_frame_id == 1 or new_frame_id % 5 == 0:
+                await websocket.send_json(msg_to_send)
+            try:
+                frame_bytes = base64.b64decode(frame_b64)
+                frame_header = int(new_frame_id).to_bytes(4, "big")
+                await websocket.send_bytes(frame_header + frame_bytes)
+            except Exception as e:
+                print(f"[WS] 二进制帧发送失败: {e}")
+            _push_count += 1
+            now = _time.time()
+            if now - _push_log_time >= 5:
+                push_fps = _push_count / (now - _push_log_time)
+                print(
+                    f"[WS] 推送FPS={push_fps:.1f} "
+                    f"target_fps={_active.get('target_fps')} "
+                    f"frame_id={new_frame_id}"
+                )
+                _push_log_time = now
+                _push_count = 0
             await asyncio.sleep(0.005)
 
     except WebSocketDisconnect:

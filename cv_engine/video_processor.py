@@ -38,6 +38,7 @@ class VideoProcessor:
         fps: float = VIDEO_FPS,
         frame_skip: int = 2,
         face_emotion: "FaceEmotionDetector | None" = None,  # type: ignore
+        face_emotion_interval: int = 5,
     ):
         self.detector = detector
         self.track_mgr = track_manager
@@ -45,6 +46,7 @@ class VideoProcessor:
         self.fps = fps
         self.frame_skip = max(1, frame_skip)
         self.face_emotion = face_emotion
+        self.face_emotion_interval = max(1, face_emotion_interval)
         self._frame_id = 0
 
     def reset(self):
@@ -106,7 +108,11 @@ class VideoProcessor:
                 tracks.append(state)
 
             # ---- 人脸表情检测（SKII-3），仅在检测帧运行 ----
-            if self.face_emotion and tracks:
+            if (
+                self.face_emotion
+                and tracks
+                and self._frame_id % (self.frame_skip * self.face_emotion_interval) == 0
+            ):
                 faces = self.face_emotion.detect(frame)
                 # 将表情关联到最近的行人（根据 bbox 重叠）
                 for face in faces:

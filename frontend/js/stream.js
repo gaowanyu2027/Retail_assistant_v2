@@ -20,6 +20,9 @@ const StreamManager = {
     reconnectAction: null,
     clientShouldReconnect: false,
     clientReconnectTimer: null,
+    fpsFrameCount: 0,
+    fpsLastTime: 0,
+    fpsValue: null,
     currentMode: 'retail',
     onFrameCallbacks: [],
     onEventCallbacks: [],
@@ -74,11 +77,15 @@ const StreamManager = {
         const url = `${protocol}//${location.host}/api/ws/stream`;
 
         this.ws = new WebSocket(url);
+        this.ws.binaryType = 'arraybuffer';
 
         this.ws.onopen = () => {
             console.log('[Stream] WebSocket 已连接');
             this.connected = true;
             this.reconnectAttempts = 0;
+            this.fpsFrameCount = 0;
+            this.fpsLastTime = performance.now();
+            this.fpsValue = document.getElementById('fps-value');
             updateStatus('online', '已连接');
             this._startHeartbeat();
             if (this.reconnectAction) {
@@ -87,6 +94,10 @@ const StreamManager = {
         };
 
         this.ws.onmessage = (event) => {
+            if (event.data instanceof ArrayBuffer) {
+                this._handleBinaryFrame(event.data);
+                return;
+            }
             this.waitingPong = false;
             clearTimeout(this.heartbeatTimeoutTimer);
             try {
@@ -146,12 +157,59 @@ const StreamManager = {
         this.waitingPong = false;
     },
 
+    _trackFps() {
+        const now = performance.now();
+        this.fpsFrameCount += 1;
+        if (!this.fpsLastTime) this.fpsLastTime = now;
+        if (now - this.fpsLastTime < 1000) return;
+        const fps = Math.round(this.fpsFrameCount * 1000 / (now - this.fpsLastTime));
+        if (!this.fpsValue) this.fpsValue = document.getElementById('fps-value');
+        if (this.fpsValue) this.fpsValue.textContent = fps;
+        this.fpsFrameCount = 0;
+        this.fpsLastTime = now;
+    },
+
+    _handleBinaryFrame(buffer) {
+        const view = new DataView(buffer);
+        const frameId = view.getUint32(0);
+        const jpegBytes = new Uint8Array(buffer, 4);
+        const blob = new Blob([jpegBytes], { type: 'image/jpeg' });
+        const url = URL.createObjectURL(blob);
+        const drawImage = () => {
+            if (this.ctx && this.canvas) {
+                const scale = Math.max(
+                    this.canvas.width / this.img.width,
+                    this.canvas.height / this.img.height
+                );
+                const dw = this.img.width * scale;
+                const dh = this.img.height * scale;
+                const dx = (this.canvas.width - dw) / 2;
+                const dy = (this.canvas.height - dh) / 2;
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.drawImage(this.img, dx, dy, dw, dh);
+            }
+        };
+        this.img.onload = () => {
+            URL.revokeObjectURL(url);
+            drawImage();
+        };
+        if (this.canvas) this.canvas.style.display = '';
+        this.img.src = url;
+        document.getElementById('frame-id').textContent = frameId;
+        this._trackFps();
+        const placeholder = document.getElementById('video-placeholder');
+        if (placeholder) placeholder.style.display = 'none';
+    },
+
     _handleMessage(msg) {
         switch (msg.type) {
             case 'frame':
                 if (msg.frame) {
+                    this._trackFps();
                     if (this.canvas) this.canvas.style.display = '';
                     this.img.src = 'data:image/jpeg;base64,' + msg.frame;
+                } else {
+                    if (this.canvas) this.canvas.style.display = '';
                 }
                 document.getElementById('frame-id').textContent = msg.frame_id;
 

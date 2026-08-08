@@ -102,6 +102,7 @@
                     <span class="session-item-title">${escapeHtml(item.title || item.session_id)}</span>
                     <span class="session-item-meta">${item.message_count || 0}条</span>
                     <button type="button" class="session-rename-btn" title="重命名会话">重命名</button>
+                    <button type="button" class="session-delete-btn" title="删除会话">删除</button>
                 `;
                 sessionList.appendChild(div);
             });
@@ -208,6 +209,23 @@
         }
     }
 
+    async function deleteSession(sessionId) {
+        if (!confirm('确定删除该会话及其全部记录？')) return;
+        try {
+            const resp = await fetch(`/api/chat/sessions/${encodeURIComponent(sessionId)}`, {
+                method: 'DELETE',
+            });
+            if (!resp.ok) throw new Error('delete failed');
+            if (currentSessionId() === sessionId) {
+                await createSession();
+            } else {
+                await loadSessions();
+            }
+        } catch (e) {
+            if (sessionCurrent) sessionCurrent.textContent = '删除失败';
+        }
+    }
+
     if (btnNew) btnNew.addEventListener('click', createSession);
     if (btnSave) btnSave.addEventListener('click', saveSession);
     if (btnOpen) btnOpen.addEventListener('click', openDrawer);
@@ -224,10 +242,15 @@
     if (sessionList) {
         sessionList.addEventListener('click', (event) => {
             const renameBtn = event.target.closest('.session-rename-btn');
+            const deleteBtn = event.target.closest('.session-delete-btn');
             const item = event.target.closest('.session-item');
             if (!item) return;
             if (renameBtn) {
                 renameSession(item.dataset.sessionId);
+                return;
+            }
+            if (deleteBtn) {
+                deleteSession(item.dataset.sessionId);
                 return;
             }
             switchSession(item.dataset.sessionId);

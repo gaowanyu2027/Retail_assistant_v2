@@ -4,6 +4,7 @@
 """
 import threading
 import atexit
+import os
 from pathlib import Path
 
 import httpx
@@ -15,6 +16,9 @@ COLLECTION_NAME = "query_history_vectors"
 EMBED_MODEL = "qllama/bge-small-zh-v1.5"
 OLLAMA_EMBED_URL = "http://127.0.0.1:11434/api/embeddings"
 VECTOR_SIZE = 512
+QDRANT_PATH = Path(
+    os.environ.get("QDRANT_PATH") or (PROJECT_ROOT / "qdrant_data")
+)
 
 _client: QdrantClient | None = None
 _client_lock = threading.Lock()
@@ -56,7 +60,7 @@ def _get_client() -> QdrantClient:
     global _client
     with _client_lock:
         if _client is None:
-            data_dir = Path(PROJECT_ROOT) / "qdrant_data"
+            data_dir = QDRANT_PATH
             data_dir.mkdir(parents=True, exist_ok=True)
             _client = QdrantClient(path=str(data_dir))
         if not _client.collection_exists(COLLECTION_NAME):

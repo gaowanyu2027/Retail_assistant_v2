@@ -531,6 +531,19 @@ body {
 .session-rename-btn:hover {
     background: rgba(77,166,255,0.12);
 }
+.session-delete-btn {
+    border: 1px solid rgba(240,80,80,0.5);
+    background: transparent;
+    color: var(--accent-red);
+    font-size: 0.72em;
+    padding: 2px 7px;
+    border-radius: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.session-delete-btn:hover {
+    background: rgba(240,80,80,0.12);
+}
 
 .query-section {
     padding: 16px 20px;
