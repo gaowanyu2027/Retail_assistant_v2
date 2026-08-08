@@ -1,0 +1,43 @@
+{
+  "framework": "onnxruntime",
+  "task": "auto-speech-recognition",
+  "domain": "audio",
+  "model_type": "multi-architecture",
+  "license": "Apache License 2.0",
+  "allow_remote": true,
+  "tags": [
+    "speech-recognition",
+    "asr",
+    "sherpa-onnx",
+    "sensevoice",
+    "funasr",
+    "paraformer",
+    "whisper",
+    "zipformer",
+    "conformer",
+    "nemo",
+    "onnx",
+    "real-time",
+    "streaming",
+    "on-device",
+    "offline",
+    "edge-computing",
+    "mobile",
+    "cross-platform"
+  ],
+  "languages": [
+    "zh", "en", "ja", "ko", "yue", "fr", "de", "es", "ru", "vi", "th", "pt",
+    "it", "pl", "uk", "hr", "be", "multilingual"
+  ],
+  "metrics": {
+    "total_models": "160+",
+    "architectures": ["SenseVoice", "Paraformer", "Whisper", "Zipformer", "Conformer", "NeMo", "LSTM", "TDNN"],
+    "supported_platforms": ["macOS", "iOS", "Android", "Linux", "Windows", "WebAssembly"],
+    "quantization_options": ["FP32", "FP16", "INT8"]
+  },
+  "pipeline_tag": "automatic-speech-recognition",
+  "model_hub": {
+    "source": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models",
+    "mirror_purpose": "Provide faster download speeds for users in China"
+  }
+}

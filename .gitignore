@@ -1,0 +1,17 @@
+*.pt
+*.pth
+*.bin
+*.mp4
+
+.idea/
+__pycache__/
+*.pyc
+venv/
+
+Ultralytics/
+qdrant_data/
+data/
+all_models/*.bz2
+sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01/
+*.onnx
+*.wav
